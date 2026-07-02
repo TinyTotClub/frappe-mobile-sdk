@@ -99,6 +99,12 @@ class RestHelper {
     _bearerToken = token;
   }
 
+  /// The Bearer token currently attached to requests, if any.
+  ///
+  /// Host apps need this to authenticate out-of-band requests that don't go
+  /// through [call] — e.g. media/video players fetching private files.
+  String? get bearerToken => _bearerToken;
+
   /// Clears all auth state.
   void clearSession() {
     _sidCookie = null;

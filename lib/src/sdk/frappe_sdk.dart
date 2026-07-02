@@ -701,6 +701,30 @@ class FrappeSDK {
     return response;
   }
 
+  /// Login with a Firebase ID token (stateless, returns user info).
+  ///
+  /// Exchange path for host apps that authenticate with Firebase Auth: pass
+  /// the current user's ID token and the backend returns the standard
+  /// mobile_auth token pair. Same post-login wiring as [login].
+  Future<Map<String, dynamic>> loginWithFirebase(String idToken) async {
+    if (!_initialized) await initialize();
+    final response = await _authService!.loginWithFirebase(idToken);
+    await _permissionService!.saveFromLoginResponse(response['permissions']);
+    final lang = response['language'] as String?;
+    if (lang != null && lang.isNotEmpty) {
+      await _translationService?.setLocale(lang);
+    }
+    _setSessionUserFromLoginResponse(response);
+    await _persistOfflineFlagFromLogin(response);
+    // See login() — full meta sync runs unconditionally so online mode
+    // also gets fresh field definitions / configuration.
+    unawaited(_initialMetaAndDataSync());
+    return response;
+  }
+
+  /// The access token currently attached to API requests, if any.
+  String? get currentAccessToken => _authService?.currentAccessToken;
+
   /// Send OTP to mobile number for login. Returns response (e.g. tmp_id).
   Future<Map<String, dynamic>> sendLoginOtp(String mobileNo) async {
     if (!_initialized) await initialize();

@@ -165,6 +165,75 @@ class AuthService {
     }
   }
 
+  /// Authenticates with a Firebase ID token using mobile_auth.login_with_firebase.
+  ///
+  /// The server verifies the token against Google's public certs, maps or
+  /// provisions the Frappe user, and returns the same response shape as
+  /// [login] — so session restore, 401 auto-refresh, and permissions all work
+  /// unchanged. Requires the lms_mobile_bridge (or equivalent) server app.
+  Future<Map<String, dynamic>> loginWithFirebase(String idToken) async {
+    if (_client == null) {
+      throw Exception('AuthService not initialized. Call initialize() first.');
+    }
+    if (_database == null) {
+      throw Exception(
+        'Database not set. Call initialize(baseUrl, database: db) first.',
+      );
+    }
+
+    try {
+      final result = await _client!.rest.call(
+        'mobile_auth.login_with_firebase',
+        args: {'id_token': idToken},
+      );
+
+      final response = result is Map<String, dynamic>
+          ? result
+          : <String, dynamic>{};
+
+      final accessToken = response['access_token'] as String?;
+      final refreshToken = response['refresh_token'] as String?;
+      final user = response['user'] as String?;
+      final fullName = response['full_name'] as String?;
+      final mobileFormNamesJson =
+          response['mobile_form_names'] as List<dynamic>?;
+
+      _roles = _parseRoles(response['roles']);
+
+      _language = response['language'] as String?;
+
+      if (accessToken == null || accessToken.isEmpty) {
+        throw Exception('Firebase login response missing access_token');
+      }
+      if (refreshToken == null || refreshToken.isEmpty) {
+        throw Exception('Firebase login response missing refresh_token');
+      }
+      if (user == null || user.isEmpty) {
+        throw Exception('Firebase login response missing user');
+      }
+
+      await _processLoginResponse(
+        response,
+        accessToken,
+        refreshToken,
+        user,
+        fullName,
+        mobileFormNamesJson,
+      );
+      return response;
+    } catch (e) {
+      _isAuthenticated = false;
+      if (e is Exception) rethrow;
+      throw Exception('Firebase login failed: $e');
+    }
+  }
+
+  /// The access token currently attached to API requests, if any.
+  ///
+  /// Use for out-of-band authenticated requests (image/video fetches of
+  /// private files). Reflects token rotation done by the auto-refresh path.
+  String? get currentAccessToken => _client?.rest.bearerToken;
+
   /// Sends OTP to mobile number for login. Returns response containing tmp_id.
   /// Call [verifyLoginOtp] with tmp_id and user-entered OTP to complete login.
   Future<Map<String, dynamic>> sendLoginOtp(String mobileNo) async {
